@@ -1,4 +1,4 @@
-# WCN7850 / ath12k: Wi‑Fi transmit throughput collapses on the Steam Frame (~8 Mbit/s vs ~860 Mbit/s for another client on the same AP), breaking Remote Play / Moonlight streaming
+# WCN7850 / ath12k: Wi‑Fi transmit throughput collapses on the Steam Frame (~8 Mbit/s vs ~860 Mbit/s for another client on the same AP), breaking Remote Play streaming
 
 > Formatted as a bug report for the SteamOS issue tracker. It is self‑contained and
 > reproducible; the `repro/` scripts and a captured run in `results/observed.txt` are
@@ -10,7 +10,7 @@ On the Steam Frame, the Wi‑Fi **transmit** path stalls under sustained load. A
 on the **same access point** transmits at ~860 Mbit/s to a wired host; the Frame, on
 that same AP to that same host, manages only **~8 Mbit/s** and its `sendto()` calls
 block because the transmit path cannot drain. Receive is healthy (200–400 Mbit/s). The
-stall is the reason Remote Play / Moonlight streaming to the headset stutters.
+stall is the reason Steam Remote Play (Steam Link) streaming to the headset stutters.
 
 The failure is isolated to the Frame itself (a same‑AP control client is fine), and
 within the Frame it is below the driver: the `ath12k` host driver hands frames off
@@ -22,7 +22,7 @@ everything needed for you to confirm or correct that.
 
 ## Impact
 
-Game streaming to the headset (Steam Remote Play and Moonlight) stutters badly. Because
+Steam Remote Play (Steam Link) streaming to the headset stutters badly. Because
 the Frame must send 802.11 Block‑Acks for the received video, a broken transmit path
 degrades the **downlink** video too (the AP stalls waiting for BAs and retransmits),
 not just the small uplink. This is the single biggest blocker to using the Frame as a
