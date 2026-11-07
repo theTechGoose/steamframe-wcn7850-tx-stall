@@ -1,0 +1,48 @@
+Observed on 2026-11-07. Steam Frame and the control Mac both associated to the same
+AP+BSSID (SSID redacted; NETGEAR RAX41, ch149 / 5745 MHz, 80 MHz HE); flood/ping target is a wired
+desktop on the same LAN (Realtek 2.5GbE, 1 Gbps link). Frame <-> wired target is a
+single wireless hop.
+
+ENVIRONMENT (Steam Frame)
+  SteamOS 0.5.7  BUILD_ID 20261103.6153824
+  kernel 7.2.0-g9a8c8ea46950  aarch64
+  driver ath12k.ko  license "Dual BSD/GPL"  intree:Y   (dmesg name: ath12k_wifi7_pci)
+  fw_version 0x110a0012  build 2025-08-20 07:43
+  QC_IMAGE_VERSION_STRING=WLAN.IOE_HMT.1.1-00018-QCAHMTSWPL_V1.0_V2.0_SILICONZ-1
+  chip_id 0x2  chip_family 0x4  soc_id 0x40170200
+  NIC: WCN785x Wi-Fi 7 320MHz 2x2 [FastConnect 7800] [17cb:1107] rev 01
+  Root complex: SM8550/SM8650 [17cb:0113]; PCIe link negotiated Gen2 x1 (downgraded
+  from the x2/8GT cap; RX still runs 200-400 Mbit so the bus is not the limit)
+
+UDP TRANSMIT FLOOD (udpflood.py <wired-target> 9 12), achieved throughput:
+  Steam Frame  run 1 :   8 Mbit/s   (elapsed 12.3s)
+  Steam Frame  run 2 :   9 Mbit/s   (elapsed 14.9s, sendto() blocked)
+  Control Mac        : 861 Mbit/s   (elapsed 12.0s)        << same AP, same target
+
+LATENCY during each client's own flood (ping target @10 Hz):
+  Steam Frame  run 1 : p50=162 p99=540 max=640 ms
+  Steam Frame  run 2 : p50=137 p99=562 max=687 ms
+  Control Mac        : p50=96  p99=297 max=391 ms
+  NOTE: the absolute latencies are inflated by bufferbloat on the path (the control
+  Mac is also elevated); the DECISIVE, clean signal is the throughput gap, ~8 vs ~861.
+
+FIRMWARE-INTERNAL COUNTERS (ath12k debugfs; lifetime, ~30 h uptime)
+  pdev_stats : Excessive retries ~1.39M ; Dropped (SW retries) ~1.32M ;
+               TX timeout ~0.96M ; PDEV continuous xretry ~40
+  htt type 5 : hwsch_misaligned_offset_received ~1.47M ; hwsch_reset_count 48
+  htt type 12: su_bar 1343 (Block-Ack recovery requests)
+
+DRIVER-SIDE (host) OBSERVATIONS
+  - 30 h uptime incl. all load tests: 32 ath12k log lines total, ZERO TX errors
+    (no ring-full, no descriptor exhaustion, no fw recovery). Even with full TX debug
+    (debug_mask DP_TX|DATA|WMI|MAC|HAL|CE) under load, the driver logs only clean RX.
+  - `iw dev wlan0 set bitrates he-mcs-5 1:4 2:4` is REJECTED (host cannot pin rate;
+    rate control is firmware-owned).
+
+RULED OUT (each with a measurement; see README)
+  signal (-60..-62 dBm, both chains balanced), channel (~10% busy, noise -96 dBm,
+  single BSS), thermal (30-37 C), PCIe bandwidth (RX fine), DFS (ch149 non-DFS),
+  Wi-Fi power save (off), CPU/scheduler (loopback flat <0.3 ms under load),
+  Bluetooth coexistence (blocking BT did not help), background scanning (none
+  configured, single BSSID), PCIe ASPM + CPU governor + deep-idle ("performance"
+  mode changed nothing).
