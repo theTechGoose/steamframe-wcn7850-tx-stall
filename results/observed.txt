@@ -1,48 +1,60 @@
-Observed on 2026-11-07. Steam Frame and the control Mac both associated to the same
-AP+BSSID (SSID redacted; NETGEAR RAX41, ch149 / 5745 MHz, 80 MHz HE); flood/ping target is a wired
-desktop on the same LAN (Realtek 2.5GbE, 1 Gbps link). Frame <-> wired target is a
-single wireless hop.
+Observed 2026-11-07. Steam Frame and a control laptop (MacBook) both associated to the
+same AP+BSSID (SSID redacted; NETGEAR, ch149 / 5745 MHz, 80 MHz HE). Flood/ping target is
+a WIRED desktop on the same LAN (Realtek 2.5GbE, 1 Gbps). Frame<->wired target and
+Mac<->wired target are each a single wireless hop. Same tool, same target, back to back.
 
 ENVIRONMENT (Steam Frame)
-  SteamOS 0.5.7  BUILD_ID 20261103.6153824
+  SteamOS 0.5.7  BUILD_ID 20261103.6153824  variant vr
   kernel 7.2.0-g9a8c8ea46950  aarch64
-  driver ath12k.ko  license "Dual BSD/GPL"  intree:Y   (dmesg name: ath12k_wifi7_pci)
+  driver ath12k.ko  license "Dual BSD/GPL"  intree:Y  (dmesg name ath12k_wifi7_pci)
   fw_version 0x110a0012  build 2025-08-20 07:43
   QC_IMAGE_VERSION_STRING=WLAN.IOE_HMT.1.1-00018-QCAHMTSWPL_V1.0_V2.0_SILICONZ-1
-  chip_id 0x2  chip_family 0x4  soc_id 0x40170200
-  NIC: WCN785x Wi-Fi 7 320MHz 2x2 [FastConnect 7800] [17cb:1107] rev 01
-  Root complex: SM8550/SM8650 [17cb:0113]; PCIe link negotiated Gen2 x1 (downgraded
-  from the x2/8GT cap; RX still runs 200-400 Mbit so the bus is not the limit)
+  NIC: WCN785x Wi-Fi 7 2x2 [FastConnect 7800] [17cb:1107] rev 01
+  Associated TX PHY rate while idle: HE-MCS 3..6, NSS 2, 80 MHz (288-648 Mbit nominal)
 
-UDP TRANSMIT FLOOD (udpflood.py <wired-target> 9 12), achieved throughput:
-  Steam Frame  run 1 :   8 Mbit/s   (elapsed 12.3s)
-  Steam Frame  run 2 :   9 Mbit/s   (elapsed 14.9s, sendto() blocked)
-  Control Mac        : 861 Mbit/s   (elapsed 12.0s)        << same AP, same target
+THE FINDING: the Frame's UPLINK collapses under simultaneous RX (bidirectional load),
+which is exactly the streaming workload. Each direction alone is fine.
 
-LATENCY during each client's own flood (ping target @10 Hz):
-  Steam Frame  run 1 : p50=162 p99=540 max=640 ms
-  Steam Frame  run 2 : p50=137 p99=562 max=687 ms
-  Control Mac        : p50=96  p99=297 max=391 ms
-  NOTE: the absolute latencies are inflated by bufferbloat on the path (the control
-  Mac is also elevated); the DECISIVE, clean signal is the throughput gap, ~8 vs ~861.
+  SINGLE DIRECTION (one at a time)
+    Frame uplink only   (UDP flood Frame->wired)    : 40 - 145 Mbit/s  (varies run to run)
+    Frame downlink only (UDP flood wired->Frame)    : ~90 Mbit/s       (healthy)
 
-FIRMWARE-INTERNAL COUNTERS (ath12k debugfs; lifetime, ~30 h uptime)
-  pdev_stats : Excessive retries ~1.39M ; Dropped (SW retries) ~1.32M ;
-               TX timeout ~0.96M ; PDEV continuous xretry ~40
-  htt type 5 : hwsch_misaligned_offset_received ~1.47M ; hwsch_reset_count 48
-  htt type 12: su_bar 1343 (Block-Ack recovery requests)
+  BIDIRECTIONAL, same tool, concurrent up+down:
+    client   uplink (concurrent)   downlink (concurrent)
+    Mac      806 Mbit/s            150 Mbit/s      << sustains ~950 Mbit/s total, no collapse
+    Frame    3.8 Mbit/s            60  Mbit/s      << uplink dies the moment RX is active
 
-DRIVER-SIDE (host) OBSERVATIONS
-  - 30 h uptime incl. all load tests: 32 ath12k log lines total, ZERO TX errors
-    (no ring-full, no descriptor exhaustion, no fw recovery). Even with full TX debug
-    (debug_mask DP_TX|DATA|WMI|MAC|HAL|CE) under load, the driver logs only clean RX.
-  - `iw dev wlan0 set bitrates he-mcs-5 1:4 2:4` is REJECTED (host cannot pin rate;
-    rate control is firmware-owned).
+  The decisive control: the Mac, on the SAME AP, SAME wired target, SAME tool, carries
+  full bidirectional traffic. The Frame, identical setup, drops its uplink to single
+  digits. So the fault is the Frame's radio, not the router, the path, or the method.
 
-RULED OUT (each with a measurement; see README)
-  signal (-60..-62 dBm, both chains balanced), channel (~10% busy, noise -96 dBm,
-  single BSS), thermal (30-37 C), PCIe bandwidth (RX fine), DFS (ch149 non-DFS),
-  Wi-Fi power save (off), CPU/scheduler (loopback flat <0.3 ms under load),
-  Bluetooth coexistence (blocking BT did not help), background scanning (none
-  configured, single BSSID), PCIe ASPM + CPU governor + deep-idle ("performance"
-  mode changed nothing).
+  Earlier worst case: under bidirectional load the Frame uplink was measured as low as
+  ~5-9 Mbit/s averaged (per-second samples hitting 1-2 Mbit/s). "~8 Mbit/s" was a true
+  worst-case bidirectional measurement.
+
+RULED OUT (each with a measurement)
+  - Router / path / test method : the Mac control is perfect on the identical setup.
+  - Rate control                : `iw dev wlan0 set bitrates` is ignored; firmware-owned.
+  - HWSCH hardware scheduler     : hwsch_reset_count stays FLAT (8 -> 8) through the entire
+                                   collapse; hwsch_misaligned_offset climbs even during
+                                   HEALTHY 140 Mbit/s TX, so it is a benign counter, not the
+                                   fault. (This corrects an earlier draft that blamed it.)
+  - Firmware crash / recovery    : none this boot (uptime ~32 h, no coredump, no mhi reset,
+                                   no "time out while waiting for fw stats done").
+  - Driver TX errors             : zero over 30 h incl. load; even full DP_TX debug logs
+                                   only clean RX, no ring-full, no descriptor exhaustion.
+  - Signal/channel/thermal/PCIe/power-save/BT-coex/scanning/ASPM : each measured, none it.
+
+MECHANISM (as far as evidence reaches)
+  The collapse is specifically the TX path losing to the RX path under concurrent load:
+  bidirectional, the Frame's UPLINK craters (3.8 Mbit/s) while its downlink still runs
+  (60 Mbit/s). A TX-vs-RX arbitration failure in the WCN7850 as configured on the Frame.
+  The exact firmware site is not statically recoverable: amss.bin is a dlpager-paged,
+  ROM-patching, QSHRINK-logged image (string->code pivots return zero refs), the same hard
+  ceiling documented for the wake-on-LAN trace on this device.
+
+RELATED: ValveSoftware/SteamOS issue #2831 (same chip, same firmware build) reports a
+crash-then-degrade variant on 6 GHz/160 MHz. Ours reproduces on demand with no crash.
+
+REPRO: see repro/ . Associate the Frame and a healthy control client to the same AP, pick
+a wired target, and run up/down/both for each. The "both" phase is the test.
