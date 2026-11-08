@@ -40,11 +40,9 @@ and ruled out:
 
 ## Impact
 
-Steam Remote Play (Steam Link) streaming to the headset stutters badly. Streaming is
-bidirectional, so the uplink collapse starves the ACK and input path. The host sees the up
-path stall and throttles the video, which shows up as the throttle and bad-link events other
-users have reported on this device. Over Wi-Fi it is the main thing stopping the Frame from
-working as a PC-VR / streaming display.
+In practice this makes Steam Remote Play (Steam Link) to the headset stutter badly, and it
+matches the throttle and bad-link events other users have reported on this device (#2831).
+Over Wi-Fi it is the main thing stopping the Frame from working as a PC-VR / streaming display.
 
 ## Environment
 
