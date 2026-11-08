@@ -82,15 +82,15 @@ the hardware scheduler out.
 
 ## Firmware localization
 
-The fault is in the WCN7850 transmit path. I tried to pin the exact site in `amss.bin` the
-way a wake-on-LAN issue on this same device was pinned. The image is ELF32 ARM, stripped,
-and built as a `dlpager` (demand-paged) ROM-patching image whose logging uses QSHRINK
-message IDs rather than string pointers. Raw searches for the virtual address of the HWSCH
-and alignment diagnostic strings return zero code references, and r2 emulation finds no
-xrefs, so the transmit and scheduler logic is in paged or ROM code that is not plaintext in
-the file. That is the same hard ceiling the wake-on-LAN trace documented on this device. The
-exact instruction is recoverable by whoever holds the ROM and the QSHRINK database, that is,
-Qualcomm. `QUALCOMM.md` is paste-ready text for that ticket.
+The fault is in the WCN7850 transmit path. I tried to pin the exact spot in `amss.bin`, the
+way a wake-on-LAN issue on this same device was tracked down, but static analysis cannot
+reach it here. The image is ELF32 ARM, stripped, and built as a `dlpager` (demand-paged)
+image that patches on-chip ROM. Its logging uses QSHRINK message IDs instead of string
+pointers, so searching for the virtual address of the HWSCH and alignment strings returns no
+code references, and r2 emulation finds no xrefs either. The transmit and scheduler logic is
+in paged or ROM code that is not plaintext in the file. That is the same wall the wake-on-LAN
+trace hit on this device. Pinning the instruction needs the ROM and the QSHRINK database,
+which only Qualcomm has. `QUALCOMM.md` is paste-ready text for that ticket.
 
 ## Related
 
@@ -101,10 +101,11 @@ crash, which is easier for an engineer to work with.
 
 ## The ask
 
-The reproduction is self-contained and the device is available for testing. I can run any
-driver change or firmware image you send and return full `htt_stats` dumps, a firmware
-coredump (`CONFIG_ATH12K_COREDUMP=y` is set), `trace-cmd`, or an AP-side capture within a
-day. Concretely:
+The reproduction is self-contained and the headset is set up for testing, with a scripted
+acceptance test and a saved baseline per configuration. Send a firmware image or a driver
+change and I will run it and send back whatever helps: full `htt_stats` dumps, a firmware
+coredump (`CONFIG_ATH12K_COREDUMP=y` is set), `trace-cmd`, or an AP-side capture. What I am
+hoping to learn:
 
 1. Is this a known transmit-under-concurrent-receive arbitration issue on WCN7850 with this firmware line, and is a newer firmware image available to try on the Frame?
 2. Which HE path is involved (UL OFDMA / trigger handling, aggregation, MU) that would starve the uplink when RX is concurrently active? Is there a driver-side feature toggle I can test from the current driver without a firmware change?
