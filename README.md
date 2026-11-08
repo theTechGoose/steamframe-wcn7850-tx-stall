@@ -25,7 +25,7 @@ So the fault is the Frame's radio, not the router, the path, or the test method.
 the reason Steam Remote Play (Steam Link) streaming to the headset stutters: the uplink
 dies, the host's bandwidth estimate falls, and it throttles the stream.
 
-## What this is, and is not
+## Root cause, and what I ruled out
 
 The fault is a transmit-versus-receive arbitration failure in the WCN7850 as configured on
 the Frame: under concurrent receive, the transmit path starves. Each of these was measured
@@ -41,10 +41,10 @@ and ruled out:
 ## Impact
 
 Steam Remote Play (Steam Link) streaming to the headset stutters badly. Streaming is
-inherently bidirectional, so the uplink collapse starves the ACK and input path, the host
-throttles the video, and the result is the throttle and bad-link pattern other users have
-reported on this device. This is the main blocker to using the Frame as a PC-VR / streaming
-display over Wi-Fi.
+bidirectional, so the uplink collapse starves the ACK and input path. The host sees the up
+path stall and throttles the video, which shows up as the throttle and bad-link events other
+users have reported on this device. Over Wi-Fi it is the main thing stopping the Frame from
+working as a PC-VR / streaming display.
 
 ## Environment
 
@@ -109,7 +109,7 @@ hoping to learn:
 
 1. Is this a known transmit-under-concurrent-receive arbitration issue on WCN7850 with this firmware line, and is a newer firmware image available to try on the Frame?
 2. Which HE path is involved (UL OFDMA / trigger handling, aggregation, MU) that would starve the uplink when RX is concurrently active? Is there a driver-side feature toggle I can test from the current driver without a firmware change?
-3. Would you like me to A/B any specific WMI or driver setting? I have the Frame on a persistent test setup with a scripted acceptance test and a saved baseline for every configuration.
+3. Would you like me to A/B any specific WMI or driver setting before the rest?
 
 ## Repository contents
 
